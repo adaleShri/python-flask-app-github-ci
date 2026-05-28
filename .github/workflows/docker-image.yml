@@ -1,3 +1,4 @@
+```yaml
 name: CI/CD Pipeline
 
 on:
@@ -7,17 +8,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  checkout:
-    name: Checkout & Setup
-    runs-on: self-hosted
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
   build:
     name: Build & Push Docker Image
     runs-on: self-hosted
-    needs: checkout
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -28,65 +22,24 @@ jobs:
       - name: Build Docker Image
         run: |
           GIT_SHA=$(git rev-parse --short HEAD)
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA ${{ secrets.DOCKERHUB_USERNAME }}/flask-app:v1.0
 
-      - name: Push Docker Image
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:latest \
+            .
+
+      - name: Push Docker Images
         run: |
           GIT_SHA=$(git rev-parse --short HEAD)
+
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:latest
 
   deploy:
     name: Deploy on EC2 Self-hosted Runner
     runs-on: self-hosted
     needs: build
-    steps:
-      - name: Stop existing flask-app container
-        run: |
-          docker stop name: CI/CD Pipeline
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-jobs:
-  checkout:
-    name: Checkout & Setup
-    runs-on: self-hosted
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-  build:
-    name: Build & Push Docker Image
-    runs-on: self-hosted
-    needs: checkout
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: DockerHub Login
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-      - name: Build Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA ${{ secrets.DOCKERHUB_USERNAME }}/flask-app:v1.0
-
-      - name: Push Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-  deploy:
-    name: Deploy on EC2 Self-hosted Runner
-    runs-on: self-hosted
-    needs: build
     steps:
       - name: Stop existing flask-app container
         run: |
@@ -100,7 +53,7 @@ jobs:
 
       - name: Pull latest Docker image
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:latest
 
       - name: Run new flask-app container
         run: |
@@ -108,166 +61,9 @@ jobs:
             --name flask-app \
             -p 5000:5000 \
             --restart unless-stopped \
-            ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Clean unused Docker resources
-        run: |
-          docker system prune -f || true
-          docker rm name: CI/CD Pipeline
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-jobs:
-  checkout:
-    name: Checkout & Setup
-    runs-on: self-hosted
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-  build:
-    name: Build & Push Docker Image
-    runs-on: self-hosted
-    needs: checkout
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: DockerHub Login
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-      - name: Build Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA ${{ secrets.DOCKERHUB_USERNAME }}/flask-app:v1.0
-
-      - name: Push Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-  deploy:
-    name: Deploy on EC2 Self-hosted Runner
-    runs-on: self-hosted
-    needs: build
-    steps:
-      - name: Stop existing flask-app container
-        run: |
-          docker stop flask-app || true
-          docker rm flask-app || true
-
-      - name: Free port 5000 if already allocated
-        run: |
-          docker ps -q --filter "publish=5000" | xargs -r docker stop
-          docker ps -aq --filter "publish=5000" | xargs -r docker rm
-
-      - name: Pull latest Docker image
-        run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Run new flask-app container
-        run: |
-          docker run -d \
-            --name flask-app \
-            -p 5000:5000 \
-            --restart unless-stopped \
-            ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Clean unused Docker resources
-        run: |
-          docker system prune -f|| true
-
-      - name: Free port 5000 if already allocated
-        run: |
-          docker ps -q --filter "publish=5000" | xargs -r docker stop
-          docker ps -aq --filter "publish=5000" | xargs -r docker rm
-
-      - name: Pull latest Docker image
-        run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Run new flask-app container
-        run: |
-          docker run -d \
-            --name name: CI/CD Pipeline
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-jobs:
-  checkout:
-    name: Checkout & Setup
-    runs-on: self-hosted
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-  build:
-    name: Build & Push Docker Image
-    runs-on: self-hosted
-    needs: checkout
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: DockerHub Login
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-      - name: Build Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA ${{ secrets.DOCKERHUB_USERNAME }}/flask-app:v1.0
-
-      - name: Push Docker Image
-        run: |
-          GIT_SHA=$(git rev-parse --short HEAD)
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:$GIT_SHA
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-  deploy:
-    name: Deploy on EC2 Self-hosted Runner
-    runs-on: self-hosted
-    needs: build
-    steps:
-      - name: Stop existing flask-app container
-        run: |
-          docker stop flask-app || true
-          docker rm flask-app || true
-
-      - name: Free port 5000 if already allocated
-        run: |
-          docker ps -q --filter "publish=5000" | xargs -r docker stop
-          docker ps -aq --filter "publish=5000" | xargs -r docker rm
-
-      - name: Pull latest Docker image
-        run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Run new flask-app container
-        run: |
-          docker run -d \
-            --name flask-app \
-            -p 5000:5000 \
-            --restart unless-stopped \
-            ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
-
-      - name: Clean unused Docker resources
-        run: |
-          docker system prune -f \
-            -p 5000:5000 \
-            --restart unless-stopped \
-            ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci
+            ${{ secrets.DOCKERHUB_USERNAME }}/python-flask-app-github-ci:latest
 
       - name: Clean unused Docker resources
         run: |
           docker system prune -f
+```
